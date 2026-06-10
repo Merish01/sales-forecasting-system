@@ -333,6 +333,12 @@ def verify_token(request: Request):
         raise HTTPException(status_code=401, detail=f"Token verification failed: {str(e)}")
 
 
+@app.get("/")
+def root():
+    """Root endpoint for basic service availability."""
+    return {"status": "ok", "service": "auth-server"}
+
+
 @app.get("/health")
 def health():
     """Health check endpoint."""
