@@ -25,6 +25,15 @@ from frontend.dashboard import render_dashboard
 init_session()
 
 
+def _streamlit_rerun():
+    if hasattr(st, "experimental_rerun"):
+        st.experimental_rerun()
+    elif hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        raise RuntimeError("Streamlit rerun is unavailable in this Streamlit version.")
+
+
 def _handle_google_callback():
     params = st.query_params
     token_param = params.get("token")
@@ -45,12 +54,18 @@ def _handle_google_callback():
         st.session_state.role = user.get("role")
         st.session_state.jwt_token = token
         st.session_state.current_page = "dashboard"
-        st.query_params = {}
-        st.experimental_rerun()
+        if hasattr(st, "experimental_set_query_params"):
+            st.experimental_set_query_params()
+        else:
+            st.query_params = {}
+        _streamlit_rerun()
     else:
         error_message = result if isinstance(result, str) else result.get("message", "Google sign-in failed")
         st.error(f"Google sign-in failed: {error_message}")
-        st.query_params = {}
+        if hasattr(st, "experimental_set_query_params"):
+            st.experimental_set_query_params()
+        else:
+            st.query_params = {}
 
 
 # ================================================================
