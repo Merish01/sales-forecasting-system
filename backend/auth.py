@@ -10,10 +10,11 @@ import re
 import uuid
 import streamlit as st
 import requests
+import os
 from typing import Any, Dict, Optional
 from config.settings import SHARED_EMAIL_BASE
 
-AUTH_SERVER_URL = "http://localhost:8000"
+AUTH_SERVER_URL = os.getenv("AUTH_SERVER_URL", "http://localhost:8000")
 
 
 def _build_auth_payload(

@@ -17,9 +17,10 @@ APP_NAME              = os.getenv("APP_NAME", "Sales Forecasting Platform")
 APP_VERSION           = os.getenv("APP_VERSION", "1.0.0")
 DEBUG                 = os.getenv("DEBUG", "false").lower() == "true"
 SHARED_EMAIL_BASE     = os.getenv("SHARED_EMAIL_BASE", "")
+AUTH_SERVER_URL       = os.getenv("AUTH_SERVER_URL", "http://localhost:8000")
 GOOGLE_CLIENT_ID      = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET  = os.getenv("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_REDIRECT_URI   = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
+GOOGLE_REDIRECT_URI   = os.getenv("GOOGLE_REDIRECT_URI", f"{AUTH_SERVER_URL}/auth/google/callback")
 
 # ── ML ────────────────────────────────────────────────────────
 FORECAST_HORIZONS = {

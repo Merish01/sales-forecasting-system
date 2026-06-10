@@ -166,8 +166,10 @@ def _auth_page():
                 st.rerun()
 
             st.caption("Or sign in with Google instead of a password.")
+            from config.settings import AUTH_SERVER_URL
+            google_login_url = f"{AUTH_SERVER_URL}/auth/google/login"
             st.markdown(
-                "<a href='http://localhost:8000/auth/google/login' target='_self'>"
+                f"<a href='{google_login_url}' target='_self'>"
                 "<button style='width:100%;padding:10px;border-radius:6px;border:none;background:#4285F4;color:white;font-weight:600;'>"
                 "Sign in with Google"
                 "</button></a>",
