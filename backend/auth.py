@@ -91,12 +91,19 @@ def set_session(user_id, email, full_name, role, jwt_token):
 
 
 def clear_session():
-    keys = ["authenticated","user_id","email","full_name","role","jwt_token",
-            "active_project","active_df","demo_mode","col_map",
-            "trained_models","forecast_results"]
-    for k in keys: st.session_state[k] = None
-    st.session_state.authenticated = False
-    st.session_state.current_page  = "home"
+    st.session_state.authenticated   = False
+    st.session_state.user_id         = None
+    st.session_state.email           = None
+    st.session_state.full_name       = None
+    st.session_state.role            = None
+    st.session_state.jwt_token       = None
+    st.session_state.active_project  = None
+    st.session_state.active_df       = None
+    st.session_state.demo_mode       = False
+    st.session_state.col_map         = {}
+    st.session_state.trained_models  = {}
+    st.session_state.forecast_results = {}
+    st.session_state.current_page    = "home"
 
 
 def auth_logout():

@@ -56,6 +56,7 @@ def _sidebar():
     name  = st.session_state.full_name or "User"
     role  = st.session_state.role or "analyst"
     proj  = st.session_state.active_project
+    is_demo = st.session_state.get("demo_mode", False)
 
     with st.sidebar:
         st.markdown("## 📊 Sales Platform")
@@ -76,6 +77,10 @@ def _sidebar():
             ("📋", "Reports",            "reports"),
             ("⚙️", "Settings",           "settings"),
         ]
+
+        # Filter out Projects and Upload for demo users
+        if is_demo:
+            pages = [p for p in pages if p[2] not in ["projects", "upload"]]
 
         for icon, label, key in pages:
             active = st.session_state.current_page == key
@@ -121,30 +126,55 @@ def _sidebar():
 def _page_home():
     uid  = st.session_state.user_id
     name = st.session_state.full_name or "User"
+    is_demo = st.session_state.get("demo_mode", False)
+
+    # Auto-load demo dataset on first visit for demo users
+    if is_demo and st.session_state.get("active_df") is None:
+        _load_demo()
+        st.rerun()
 
     st.title(f"👋 Welcome back, {name}!")
     st.markdown("Your intelligent sales forecasting and business analytics workspace.")
     st.divider()
 
     # ── Quick Action Buttons ──────────────────────────────
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        if st.button("🎮 Explore Demo Dataset", use_container_width=True, type="primary"):
-            _load_demo()
-            st.session_state.current_page = "analytics"
-            st.rerun()
-    with c2:
-        if st.button("📤 Upload Your Dataset", use_container_width=True):
-            st.session_state.current_page = "upload"
-            st.rerun()
-    with c3:
-        if st.button("📁 New Project", use_container_width=True):
-            st.session_state.current_page = "projects"
-            st.rerun()
-    with c4:
-        if st.button("🔮 Go to Forecasting", use_container_width=True):
-            st.session_state.current_page = "forecasting"
-            st.rerun()
+    cols = []
+    if not is_demo:
+        c1, c2, c3, c4 = st.columns(4)
+        cols = [c1, c2, c3, c4]
+        with c1:
+            if st.button("🎮 Explore Demo Dataset", use_container_width=True, type="primary"):
+                _load_demo()
+                st.session_state.current_page = "analytics"
+                st.rerun()
+        with c2:
+            if st.button("📤 Upload Your Dataset", use_container_width=True):
+                st.session_state.current_page = "upload"
+                st.rerun()
+        with c3:
+            if st.button("📁 New Project", use_container_width=True):
+                st.session_state.current_page = "projects"
+                st.rerun()
+        with c4:
+            if st.button("🔮 Go to Forecasting", use_container_width=True):
+                st.session_state.current_page = "forecasting"
+                st.rerun()
+    else:
+        # Demo mode: show only feature exploration buttons
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("📈 View Analytics", use_container_width=True, type="primary"):
+                st.session_state.current_page = "analytics"
+                st.rerun()
+        with c2:
+            if st.button("🔮 Forecasting", use_container_width=True):
+                st.session_state.current_page = "forecasting"
+                st.rerun()
+        with c3:
+            if st.button("📋 Generate Reports", use_container_width=True):
+                st.session_state.current_page = "reports"
+                st.rerun()
+        st.info("🎮 **Demo Mode**: Explore all features using the built-in dataset. No file uploads or project management in demo mode.")
 
     st.divider()
 
@@ -156,7 +186,7 @@ def _page_home():
         st.info("**📈 Trend Analysis**\n\nDaily, weekly, monthly, yearly views with rolling averages.")
         st.info("**🌟 Seasonal Analysis**\n\nBest/worst months, quarterly breakdown, day-of-week patterns.")
     with f2:
-        st.info("**🔮 ML Forecasting**\n\nLinear Regression, Random Forest, XGBoost — auto-selects best model.")
+        st.info("**🔮 ML Forecasting**\n\nLinear Regression, Random Forest, Gradient Boosting — auto-selects best model.")
         st.info("**📦 Product Analytics**\n\nTop products, revenue share, product trend lines.")
         st.info("**🗺️ Region Analytics**\n\nRegional breakdown, comparison charts, region-level forecast.")
     with f3:
@@ -237,6 +267,15 @@ def _open_project(project_id):
 
 def _page_projects():
     uid = st.session_state.user_id
+    is_demo = st.session_state.get("demo_mode", False)
+
+    if is_demo:
+        st.warning("🎮 Project management is not available in Demo Mode. Explore all features with the demo dataset!")
+        if st.button("← Back to Dashboard"):
+            st.session_state.current_page = "home"
+            st.rerun()
+        return
+
     st.title("📁 Project Workspace")
 
     # ── Create new project ────────────────────────────────
@@ -294,7 +333,15 @@ def _page_projects():
 
 def _page_upload():
     uid  = st.session_state.user_id
+    is_demo = st.session_state.get("demo_mode", False)
     proj = st.session_state.active_project
+
+    if is_demo:
+        st.warning("🎮 File upload is not available in Demo Mode. Explore all features with the demo dataset!")
+        if st.button("← Back to Dashboard"):
+            st.session_state.current_page = "home"
+            st.rerun()
+        return
 
     st.title("📤 Upload Dataset")
 
@@ -539,7 +586,7 @@ def _page_forecasting():
     # ── Train models ──────────────────────────────────────
     st.subheader("🤖 Train All Models")
     st.info(
-        "Trains **Linear Regression**, **Random Forest**, and **XGBoost** "
+        "Trains **Linear Regression**, **Random Forest**, and **Gradient Boosting** "
         "on your daily aggregated sales data, then auto-selects the best model."
     )
 
@@ -649,7 +696,12 @@ def _page_forecasting():
                     daily_eng = engineer_features(df, date_col, sales_col)
 
                 fc_df = generate_forecast(daily_eng, date_col, results[model_sel], horizon_days)
-                st.session_state.forecast_results[horizon_name] = fc_df
+
+                forecast_results = st.session_state.get("forecast_results")
+                if forecast_results is None:
+                    forecast_results = {}
+                    st.session_state.forecast_results = forecast_results
+                forecast_results[horizon_name] = fc_df
 
                 # Historical for chart
                 hist_daily = daily_eng[[date_col, "daily_sales"]].tail(90).copy()
@@ -771,12 +823,21 @@ def _page_regions():
     res       = region_analysis(df, date_col or "date", sales_col, region_col)
     by_region = res["by_region"]
 
+    region_options = ["All Regions"] + list(by_region[region_col].astype(str))
+    selected_region = st.selectbox("Select region for analysis", region_options)
+
+    if selected_region != "All Regions":
+        filtered_df = df[df[region_col].astype(str) == selected_region]
+        res = region_analysis(filtered_df, date_col or "date", sales_col, region_col)
+        by_region = res["by_region"]
+
     r1,r2,r3 = st.columns(3)
     r1.metric("Regions",     len(by_region))
     r2.metric("Top Region",  str(by_region.iloc[0][region_col]) if not by_region.empty else "N/A")
     top_share = float(by_region["share_pct"].iloc[0]) if not by_region.empty else 0
     r3.metric("Top Region Share", fmt_pct(top_share))
 
+    st.info("Select a region from the list above to refresh the regional summary.")
     st.divider()
     rc1, rc2 = st.columns(2)
     with rc1:
@@ -788,14 +849,6 @@ def _page_regions():
         st.plotly_chart(
             pie_chart(list(by_region[region_col]), list(by_region["total"]),
                       "Region Revenue Share"),
-            use_container_width=True
-        )
-
-    if not res["reg_trend"].empty:
-        st.subheader("📈 Monthly Sales by Region")
-        st.plotly_chart(
-            grouped_bar_pivot(res["reg_trend"], "month", "region", "sales",
-                              "Monthly Regional Comparison"),
             use_container_width=True
         )
 

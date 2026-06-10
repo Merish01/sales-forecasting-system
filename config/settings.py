@@ -29,7 +29,7 @@ FORECAST_HORIZONS = {
     "Next 6 Months": 180,
 }
 
-MODEL_NAMES = ["Linear Regression", "Random Forest", "XGBoost"]
+MODEL_NAMES = ["Linear Regression", "Random Forest", "Gradient Boosting"]
 
 # ── UI Palette ────────────────────────────────────────────────
 PALETTE = [

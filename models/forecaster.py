@@ -2,9 +2,9 @@
 # models/forecaster.py  —  ML Forecasting Engine
 # ================================================================
 # Models:
-#   1. Linear Regression  (sklearn)
-#   2. Random Forest      (sklearn)
-#   3. XGBoost Regressor  (xgboost)
+#   1. Linear Regression      (sklearn)
+#   2. Random Forest          (sklearn)
+#   3. Gradient Boosting Regressor  (sklearn)
 #
 # Each model is trained, evaluated, and can predict forward.
 # Evaluation metrics: MAE, RMSE, R², MAPE
@@ -17,11 +17,10 @@ import io
 from datetime import timedelta
 
 from sklearn.linear_model     import LinearRegression
-from sklearn.ensemble         import RandomForestRegressor
+from sklearn.ensemble         import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.preprocessing    import StandardScaler
 from sklearn.model_selection  import TimeSeriesSplit
 from sklearn.metrics          import mean_absolute_error, mean_squared_error, r2_score
-import xgboost as xgb
 
 from services.data_processor import engineer_features, get_feature_cols
 
@@ -54,18 +53,17 @@ def _build_rf():
         min_samples_leaf=2, random_state=42, n_jobs=-1
     )
 
-def _build_xgb():
-    return xgb.XGBRegressor(
+def _build_gb():
+    return GradientBoostingRegressor(
         n_estimators=300, max_depth=6,
         learning_rate=0.05, subsample=0.8,
-        colsample_bytree=0.8, random_state=42,
-        verbosity=0
+        random_state=42
     )
 
 MODEL_BUILDERS = {
     "Linear Regression": _build_lr,
     "Random Forest":     _build_rf,
-    "XGBoost":           _build_xgb,
+    "Gradient Boosting": _build_gb,
 }
 
 
@@ -165,20 +163,24 @@ def generate_forecast(daily_df, date_col, model_info, horizon_days):
         except Exception:
             break
 
-        if feat_df is None:
+        if feat_df is None or not isinstance(feat_df, dict):
             break
 
-        X_future = np.array([[feat_df.get(c, 0) for c in feature_cols]])
-        X_scaled = scaler.transform(X_future)
-        pred_val  = max(0.0, float(model.predict(X_scaled)[0]))
+        try:
+            X_future = np.array([[feat_df.get(c, 0) for c in feature_cols]])
+            X_scaled = scaler.transform(X_future)
+            pred_val  = max(0.0, float(model.predict(X_scaled)[0]))
 
-        pred_dates.append(future_date)
-        pred_values.append(round(pred_val, 2))
+            pred_dates.append(future_date)
+            pred_values.append(round(pred_val, 2))
 
-        # Fill the placeholder with prediction so next lag is correct
-        hist = pd.concat([hist, pd.DataFrame({
-            date_col: [future_date], "daily_sales": [pred_val]
-        })], ignore_index=True)
+            # Fill the placeholder with prediction so next lag is correct
+            hist = pd.concat([hist, pd.DataFrame({
+                date_col: [future_date], "daily_sales": [pred_val]
+            })], ignore_index=True)
+        except Exception:
+            # If prediction fails, stop forecasting
+            break
 
     return pd.DataFrame({"date": pred_dates, "forecast": pred_values})
 
@@ -190,36 +192,49 @@ def _build_one_row_features(hist, date_col, target_date, feature_cols):
     """
     try:
         engineered = engineer_features(hist, date_col, "daily_sales")
+        if engineered is None:
+            raise ValueError("engineer_features returned None")
         row = engineered[engineered[date_col] == target_date]
         if row.empty:
             # Take last row as approximation
             row = engineered.tail(1)
-        return row[feature_cols].iloc[0].to_dict()
-    except Exception:
+        result = row[feature_cols].iloc[0].to_dict()
+        if result is None:
+            raise ValueError("Feature row is None")
+        return result
+    except Exception as e:
         # Fallback: manual calendar features only
-        d = pd.Timestamp(target_date)
-        sales_hist = hist["daily_sales"].dropna().values
-        lag1 = float(sales_hist[-1]) if len(sales_hist) >= 1 else 0
-        lag7 = float(sales_hist[-7]) if len(sales_hist) >= 7 else lag1
-        roll = float(np.mean(sales_hist[-7:])) if len(sales_hist) >= 7 else lag1
-        row = {
-            "year": d.year, "month": d.month,
-            "quarter": d.quarter, "week_num": d.isocalendar().week,
-            "day_of_week": d.dayofweek, "is_weekend": int(d.dayofweek >= 5),
-            "day_of_year": d.dayofyear,
-            "lag_1": lag1, "lag_7": lag7,
-            "rolling_mean_7": roll, "rolling_std_7": 0,
-            "rolling_mean_14": roll, "rolling_std_14": 0,
-            "rolling_mean_30": roll, "rolling_std_30": 0,
-        }
-        return {k: row.get(k, 0) for k in feature_cols}
+        try:
+            d = pd.Timestamp(target_date)
+            sales_hist = hist["daily_sales"].dropna().values
+            lag1 = float(sales_hist[-1]) if len(sales_hist) >= 1 else 0
+            lag7 = float(sales_hist[-7]) if len(sales_hist) >= 7 else lag1
+            roll = float(np.mean(sales_hist[-7:])) if len(sales_hist) >= 7 else lag1
+            row = {
+                "year": d.year, "month": d.month,
+                "quarter": d.quarter, "week_num": d.isocalendar().week,
+                "day_of_week": d.dayofweek, "is_weekend": int(d.dayofweek >= 5),
+                "day_of_year": d.dayofyear,
+                "lag_1": lag1, "lag_7": lag7,
+                "rolling_mean_7": roll, "rolling_std_7": 0,
+                "rolling_mean_14": roll, "rolling_std_14": 0,
+                "rolling_mean_30": roll, "rolling_std_30": 0,
+            }
+            fallback_dict = {k: row.get(k, 0) for k in feature_cols}
+            if fallback_dict is None:
+                # Final safety: return minimal dict
+                fallback_dict = {k: 0 for k in feature_cols}
+            return fallback_dict
+        except Exception:
+            # Ultimate fallback: return zero dict for all features
+            return {k: 0 for k in feature_cols}
 
 
 # ── Feature Importance ────────────────────────────────────────
 
 def get_feature_importance(model_info, feature_cols):
     """
-    Return a DataFrame of feature importances for RF / XGBoost.
+    Return a DataFrame of feature importances for RF / Gradient Boosting.
     Returns None for Linear Regression.
     """
     model = model_info["model"]
